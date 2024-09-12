@@ -1,0 +1,257 @@
+---
+title: "PromblemSet1"
+format: html
+editor: visual
+---
+
+GitHub link: <https://github.com/IceCedar/STATS506>
+
+## Problem 1 - Wine Data
+
+### a.Import the data into a data.frame and names each column
+
+```{r}
+winedata<-read.table("wine.data",header=FALSE, sep=",")
+
+#covert to data.frame
+winedf<-data.frame(winedata)
+dim(winedf)
+names(winedf)<-c("Class","Alcohol","Malic_acid","Ash","Alcalinity_of_ash","Magnesium","Total_phenols","Flavanoids","Nonflavanoid_phenols","Proanthocyanins","Color_intensity","Hue","OD280/OD315_of_diluted_wines","Proline")
+head(winedf,5)
+```
+
+### b. The number of wine within each class is equal to the data reported in "wine.names
+
+```{r}
+class<-table(winedf$Class)
+names(class)<-c("class1","class2","class3")
+class
+```
+
+### c.use data to answer questions
+
+#### 1.The correlation between alcohol content and color intensity is 0.5463642.
+
+```{r}
+cor(winedf$Alcohol,winedf$Color_intensity)
+```
+
+#### 2.Class1 has the highest correlation. Class2 has the lowest correlation.
+
+```{r}
+#Creater a vector of length=3 to store the correlation of different classes.
+correlation<-vector(length=3)
+for (i in 1:3){
+  winedf_byclass<-winedf[winedf$Class==i,]
+  correlation[i]<-cor(winedf_byclass$Alcohol,winedf_byclass$Color_intensity)
+}
+names(correlation)<-c("Class1_rho","Class2_rho","Class3_rho")
+correlation
+
+```
+
+#### 3.The alcohol content of the wine with the highest color intensity is 14.34.
+
+```{r}
+##Find the highest color intensity.
+CImax<-max(winedf$Color_intensity)
+alcohol_CImax<-winedf$Alcohol[winedf$Color_intensity==CImax]
+c("alcohol content"=alcohol_CImax,"highest color intensity"=CImax)
+```
+
+#### 4.8.43% wines had a higher content of proanthocyanins compare to ash.
+
+```{r}
+wineL<-length(winedf$Class)
+
+#filter the data by the criterion that the content of proanthocyanins is larger than ash.
+wineCompare<-length(winedf$Class[winedf$Proanthocyanins>winedf$Ash])
+p<-wineCompare/wineL
+print(paste(p*100,"% wines had a higher content of proanthocyanins compare to ash."))
+```
+
+### d.Table for the average value of each variable.
+
+```{r}
+averageTotal<-sapply(winedf[,2:14],mean)
+averageClass1<-sapply(winedf[winedf$Class==1,2:14],mean)
+averageClass2<-sapply(winedf[winedf$Class==2,2:14],mean)
+averageClass3<-sapply(winedf[winedf$Class==3,2:14],mean)
+
+N<-c("Class","Alcohol","Malic_acid","Ash","Alcalinity_of_ash","Magnesium","Total_phenols","Flavanoids","Nonflavanoid_phenols","Proanthocyanins","Color_intensity","Hue","OD280/OD315_of_diluted_wines","Proline")
+Combine<-matrix(c(averageTotal,averageClass1,averageClass2,averageClass3),nrow=4,byrow=TRUE)
+
+Combinedf<-data.frame(Combine)
+names(Combinedf)<-names(winedf[,2:14])
+rownames(Combinedf)<-c("overall average","average of class 1","average of class 2","average of class 3")
+Combinedf
+```
+
+### e.Perform t-tests to examine whether the level of phenols differs across the three classes
+
+```{r}
+t.test(winedf$Nonflavanoid_phenols[winedf$Class==1],winedf$Nonflavanoid_phenols[winedf$Class==2])
+```
+
+Assume the significance level is alpha=0.05. Since the p-value is smaller than 0.05. The level of phenols between class 1 and class 2 is not the same.
+
+```{r}
+t.test(winedf$Nonflavanoid_phenols[winedf$Class==2],winedf$Nonflavanoid_phenols[winedf$Class==3])
+```
+
+Since the p-value is smaller than 0.05. The level of phenols between class 2 and class 3 is not the same.
+
+```{r}
+t.test(winedf$Nonflavanoid_phenols[winedf$Class==1],winedf$Nonflavanoid_phenols[winedf$Class==3])
+```
+
+Since the p-value is smaller than 0.05. The level of phenols between class 1 and class 3 is not the same.
+
+## Problem 2 - AskManager.org Data
+
+### a.Import the data into a frame
+
+```{r}
+askmanager<-read.csv("AskAManager.csv",header=TRUE)
+askmanager_df<-data.frame(askmanager)
+head(askmanager_df,5)
+```
+
+### b.Simplify the variable names.
+
+```{r}
+names(askmanager_df)<-c("X","Timestamp","Age","Occupation","Position","Position_Note","Auual_salary","Compenstion","Currency","Currency_Other","Income_Note","Country","State_US","City","Overall_experience","Field_experience","Education","Gender","Race")
+names(askmanager_df)
+```
+
+### c.Restrict the data to those being paid in USD.
+
+```{r}
+#number of observations before restricting
+Nbefore<-length(askmanager_df$X)
+AM_US<-askmanager_df[askmanager_df$Currency=="USD",]
+
+#number of observations after restricting
+Nafter<-length(AM_US$X)
+
+print(paste("the number of observations before restricting data is",Nbefore))
+print(paste("the number of observations after restricting data is",Nafter))
+```
+
+### d.Eliminate unreasonable age, years of experience in their field, and years of experience total.
+
+```{r}
+#Eliminate impossible ages. Taking "65 or over" as retirement age, which can be eliminated.
+Elage<-AM_US[AM_US$Age!="65 or over",]
+
+#Eliminate impossible years of experience in their fields. People with "1 year or less" can be seen as beginner, who may not good at their professional work.
+Elfield<-Elage[Elage$Field_experience!="1 year or less",]
+
+#Eliminate impossible years of experience total. People with "1 year or less" and "2 - 4 years" may still don't get used to their work.
+Eltotal_temp<-Elfield[Elfield$Overall_experience!="1 year or less" ,]
+Eltotal<-Eltotal_temp[Eltotal_temp$Overall_experience!="2 - 4 years" ,]
+
+NEltotal<-length(Eltotal$X)
+print(paste("the number of observations after eliminating unreasonble data is",NEltotal))
+```
+
+### e. Eliminate rows with extremly low and high salaries.
+
+```{r}
+#The minimum wage in the US is 7.25$/hr. Assuming the people work #full-time for 40 hours week, the annual salary is $15,080. #$15,080 is taken as lower bound.
+#The annual salary exceeding $150,000 can be deleted.
+
+Ellow<-Eltotal[Eltotal$Auual_salary>15080,]
+Elhigh<-Ellow[Ellow$Auual_salary<150000,]
+NElhigh<-length(Elhigh$X)
+
+print(paste("the number of observations after eliminating unreasonble income is",NElhigh))
+```
+
+### f.Whether there is a statistical association between education and salary, controlling for years of experience.
+
+```{r}
+Elhigh$Education=factor(Elhigh$Education)
+summary(Elhigh$Education)
+
+#label the education level from High school to phD
+levels(Elhigh$Education)=c(1,4,2,5,7,6,3)
+Elhigh$Education<-as.numeric(Elhigh$Education)
+
+Elhigh$Overall_experience=factor(Elhigh$Overall_experience)
+summary(Elhigh$Overall_experience)
+
+#label the overall experience from "5-7 years" to "41 years or more".
+levels(Elhigh$Overall_experience)=c(3,4,5,6,1,2)
+Elhigh$Overall_experience<-as.numeric(Elhigh$Overall_experience)
+
+lm1<-lm(Auual_salary~Education+Overall_experience,data=Elhigh)
+
+summary(lm1)
+```
+
+Since the p-value of education is 0.00621, which is significant at the 0.01 level. It suggests a significant positive correlation between salary and education level.
+
+## Problem 3 - Palindromic Numbers
+
+### a. Write function isPalindromic.
+
+```{r}
+isPalindromic<-function(x){
+  #x represents an input value
+  output<-list()
+  #Test whether input value is a positive integer. If the input value is a positive integer, the process will continue.
+  if (x%%1==0 & x>0){
+    int_reverse=0
+    temp=x
+    #reverse the number
+    while(temp!=0){
+      remainder=temp%%10
+      int_reverse=int_reverse*10+remainder
+      temp=temp%/%10
+    }
+    #whether the input value is equal to the reverse of their digits.
+    if(x==int_reverse){
+      output<-list("isPalindromic"=TRUE,"reversed"=x)
+    }else{
+      warning("The input value is not a palindromic number.")
+      output<-list("isPalindromic"=FALSE,"reversed"=int_reverse)
+    }
+  }else{
+    stop("The input value is invalid.")
+  }
+  return(output)
+}
+```
+
+### b. Write function nextPalindrome
+
+```{r}
+nextPalindrome<-function(x){
+  x=x+1
+  #whether the next value is palindrome.
+  temp<-isPalindromic(x)
+  if(temp$isPalindromic==TRUE){
+    return(x)
+  }else{
+    while(temp$isPalindromic!=TRUE){
+      #if the input value isn't palindrome, test whether the next number is palindrome.
+      x=x+1
+      
+      #suppress warnings to prevent the repeated occurence.
+      suppressWarnings(temp<-isPalindromic(x))
+    }
+   return(x)
+  }
+}
+```
+
+### c.Find next palindrome for each of following.
+
+```{r}
+nextPalindrome(391)
+nextPalindrome(9928)
+nextPalindrome(19272719)
+nextPalindrome(109)
+nextPalindrome(2)
+```
