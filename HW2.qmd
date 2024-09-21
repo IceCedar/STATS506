@@ -1,0 +1,294 @@
+---
+title: "HW2"
+format: pdf
+editor: visual
+---
+
+# Problem Set #2
+
+## Problem 1 - Dice Game
+
+### a.
+
+### Version 1: Using loop
+
+```{r}
+#' Dice game
+#' @param n The number of dice to roll 
+#' @return total Total winnings
+#' @details use loop to implement this game.
+#' Player need to ay $2 for each game. When the roll is 3 or 5, the player wins
+#' twice of rows. Otherwise, the player loses.
+play_dice1<-function(n){
+  cost=-2
+  total=0
+  
+  #The outcome of n times of rolls
+  roll<-sample(1:6,n,replace = TRUE)
+  
+  #using loop to obtain total winnings.
+  for (i in 1:n){
+    if (roll[i]==3 || roll[i]==5){
+      total = total + cost  +2*roll[i]
+    }else{
+      total = total + cost
+    }
+  }
+  return(total)
+}
+```
+
+### Version 2: Using built-in R vectorized functions.
+
+```{r}
+#' Dice game
+#' @param n The number of dice to roll 
+#' @return total Total winnings
+#' @details use built-in R vectorized functions to implement this game.
+play_dice2<-function(n){
+  cost=-2
+  total=0
+  
+  #The outcome of n times of rolls
+  roll<-sample(1:6,n,replace = TRUE)
+  
+  #calculate the number of wins for rolling 3 and 5 through logical wins.
+  lw3<-length(roll[roll==3])
+  lw5<-length(roll[roll==5])
+  
+  total = cost*n + 6*lw3 + 10*lw5
+  return(total)
+}
+```
+
+### Version 3: Rolling all the dice into one and collapsing into a single table.
+
+```{r}
+#' Dice game
+#' @param n The number of dice to roll 
+#' @return total Total winnings
+play_dice3<-function(n){
+  cost=-2
+  total=0
+  
+  #The outcome of n times of rolls
+  roll<-sample(1:6,n,replace = TRUE)
+  roll_table<-table(roll)
+  
+  #calculate the total of winnings
+  if (3 %in% names(roll_table)){
+    total = total + 2 * ( 3 * roll_table["3"])
+  }
+  if (5 %in% names(roll_table)){
+    total = total + 2 * ( 5 * roll_table["5"])
+  }
+  
+  
+  total = total + cost*n
+  return(total)
+}
+```
+
+### Version 4: Use apply().
+
+```{r}
+#' Dice game
+#' @param n The number of dice to roll 
+#' @return total Total winnings
+#' @details use apply() to implement this game.
+play_dice4<-function(n){
+  cost=-2
+  total=0
+  
+  #The outcome of n times of rolls
+  roll<-sample(1:6,n,replace = TRUE)
+  
+  #calculate the number of winnings,
+  win <-sapply(roll, function(x){
+    if (x==3){
+      return (3*2)
+    }else if(x==5){
+      return (5*2)
+    }else{
+      return(0)
+    }
+  })
+  
+  total = cost*n + sum(win)
+  return(total)
+}
+```
+
+### b. Demonstrate that all versions work.
+
+```{r}
+#version1
+print(paste("version 1(n=3):",play_dice1(3)))
+print(paste("version 1(n=3000):", play_dice1(3000)))
+
+#version2
+print(paste("version 2(n=3):",play_dice2(3)))
+print(paste("version 2(n=3000):", play_dice2(3000)))
+
+#version3
+print(paste("version 3(n=3):",play_dice3(3)))
+print(paste("version 3(n=3000):", play_dice3(3000)))
+
+#version4
+print(paste("version 4(n=3):",play_dice4(3)))
+print(paste("version 4(n=3000):", play_dice4(3000)))
+```
+
+### c. Demonstrate that four versions have the same result.
+
+```{r}
+#version1
+set.seed(100)
+print(paste("version 1(n=3):",play_dice1(3)))
+print(paste("version 1(n=3000):", play_dice1(3000)))
+
+#version2
+set.seed(100)
+print(paste("version 2(n=3):",play_dice2(3)))
+print(paste("version 2(n=3000):", play_dice2(3000)))
+
+#version3
+set.seed(100)
+print(paste("version 3(n=3):",play_dice3(3)))
+print(paste("version 3(n=3000):", play_dice3(3000)))
+
+#version4
+set.seed(100)
+print(paste("version 4(n=3):",play_dice4(3)))
+print(paste("version 4(n=3000):", play_dice4(3000)))
+```
+
+### d.Use the microbenchmark package to compare the speed.
+
+```{r}
+library(microbenchmark)
+
+#low input (n=1000)
+n<-1000
+microbenchmark(play_dice1(n),play_dice2(n),play_dice3(n),play_dice4(n))
+```
+
+Function 2, which utilizes built-in R vectorized functions, is the most efficient because these functions are implemented in the compiled language C. In contrast, Function 4, which uses apply(), is the least efficient, as it processes each element in R, leading to increased overhead. Function 1 is more efficient than Function 3 when the sample size is small, likely because table() requires additional processing that can be slower than the direct iteration performed by a for loop.
+
+```{r}
+#large input (n=100000)
+n<-100000
+microbenchmark(play_dice1(n),play_dice2(n),play_dice3(n),play_dice4(n))
+```
+
+Function 2 remains the most efficient, while Function 4 is the least efficient. However, when the dataset is large, Function 3 using table() can be more efficient than Function 1 with a for loop. This is likely because the time taken by the table() function to interpret the code is outweighed by the overhead associated with the table() function call.
+
+### e.
+
+```{r}
+#' Simulate the outcomes of
+#' @param n The number of dice to roll 
+#' @return simulated expected value
+#' @details use simulated result to calculate the probability of win and lose.
+simdice<-function(n){
+  #total outcomes of rolls
+  roll<-sample(1:6,n,replace=TRUE)
+  
+  #number of roll=3, roll=5, and others
+  roll3<-length(roll[roll==3])
+  roll5<-length(roll[roll==5])
+  other<-n-roll3-roll3
+  
+  #calculated simulated expectation
+  e<-roll3/n*4+roll5/n*8-other/n*2
+  
+  return(e)
+}
+simdice(10000)
+```
+
+This game is not fair. The simulation results indicate that, on average, the player is expected to win rather than lose.
+
+## Problem 2 - Linear Regression
+
+### a. Rename the columns of the data.
+
+```{r}
+cars<-read.csv("cars.csv",head=TRUE)
+
+#convert data to data frame.
+cars_df<-data.frame(cars)
+names(cars_df)<-c("height","length","width","driveline","engine_type","hybrid",
+                  "gears","transmission","city_mpg","fuel_type","highway_mpg",
+                  "classification","id","make","model_year","year","horsepower",
+                  "torque")
+names(cars_df)
+```
+
+### b. Restrict the data to cars whose Fuel type is "Gasoline".
+
+```{r}
+#filter cars by fuel type
+cars_gasoline<-cars_df[cars_df$fuel_type=="Gasoline",]
+head(cars_gasoline)
+```
+
+### c. Examine the distribution of highway gas mileage.
+
+```{r}
+summary(cars_gasoline$highway_mpg)
+```
+
+The close approximation of the mean and median suggests that the distribution of highway gas mileage is relatively symmetrical. However, the significant difference between the maximum value and the other statistics indicates the presence of outliers that affect the overall distribution.
+
+```{r}
+boxplot(cars_gasoline$highway_mpg)
+```
+
+The boxplot of highway gas mileage indicates the presence of an extreme value that is significantly distant from the other data points.
+
+```{r}
+#use log tansformation of variable
+cars_gasoline$loghighway_mpg<-log(cars_gasoline$highway_mpg)
+```
+
+Consider applying a log transformation to mitigate the impact of outliers.
+
+### d. Fit a linear regression model predicting MPG on the highway.
+
+```{r}
+#categorical variable
+cars_gasoline$year<-as.factor(cars_gasoline$year)
+highway_mpg<-lm(loghighway_mpg~torque+horsepower+height+length+width+year,data=cars_gasoline)
+summary(highway_mpg)
+```
+For each additional unit increase in torque, the logarithm of highway MPG is expected to decrease by about -2.294e-03 miles per gallon, holding all other variables constant. It indicates the negative relationship between highway MPG and torque. Higher torque is associated with lower fuel efficiency on the highway.
+
+### e. Refit the model and generate an interaction plot.
+```{r}
+library(interactions)
+
+#refit the model
+highway_mpg1<-lm(loghighway_mpg~torque*horsepower+height+length+width+year,data=cars_gasoline)
+
+#generate an interaction plot
+interact_plot(highway_mpg1,pred="torque",modx="horsepower",at = list(year = "2011"))
+```
+
+### f. Calculate the estimator of bata from d.
+```{r}
+#create a matrix for all observations
+x<-model.matrix(highway_mpg,data=cars_gasoline)
+
+#create vector for observed highway MPG.
+y<-as.vector(cars_gasoline$loghighway_mpg)
+
+#calculate beta hat.
+beta<- solve(t(x)%*%x)%*%t(x)%*%y
+
+beta
+highway_mpg$coefficients
+```
+
+
+The `echo: false` option disables the printing of code (only output is displayed).
