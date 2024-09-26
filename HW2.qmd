@@ -5,6 +5,7 @@ editor: visual
 ---
 
 # Problem Set #2
+GitHub link: <https://github.com/IceCedar/STATS506>
 
 ## Problem 1 - Dice Game
 
@@ -23,16 +24,15 @@ play_dice1<-function(n){
   cost=-2
   total=0
   
-  #The outcome of n times of rolls
-  roll<-sample(1:6,n,replace = TRUE)
-  
   #using loop to obtain total winnings.
   for (i in 1:n){
-    if (roll[i]==3 || roll[i]==5){
-      total = total + cost  +2*roll[i]
-    }else{
-      total = total + cost
-    }
+    #The outcome of the roll
+    roll<-sample(1:6,1)
+    if (roll==3 || roll==5){
+      total = total + cost +2*roll
+      }else{
+        total = total + cost
+      }
   }
   return(total)
 }
@@ -76,12 +76,12 @@ play_dice3<-function(n){
   roll_table<-table(roll)
   
   #calculate the total of winnings
-  if (3 %in% names(roll_table)){
-    total = total + 2 * ( 3 * roll_table["3"])
-  }
+   if (3 %in% names(roll_table)){
+     total = total + 2 * ( 3 * roll_table["3"])
+     }
   if (5 %in% names(roll_table)){
     total = total + 2 * ( 5 * roll_table["5"])
-  }
+    }
   
   
   total = total + cost*n
@@ -143,22 +143,22 @@ print(paste("version 4(n=3000):", play_dice4(3000)))
 
 ```{r}
 #version1
-set.seed(100)
+set.seed(123)
 print(paste("version 1(n=3):",play_dice1(3)))
 print(paste("version 1(n=3000):", play_dice1(3000)))
 
 #version2
-set.seed(100)
+set.seed(123)
 print(paste("version 2(n=3):",play_dice2(3)))
 print(paste("version 2(n=3000):", play_dice2(3000)))
 
 #version3
-set.seed(100)
+set.seed(123)
 print(paste("version 3(n=3):",play_dice3(3)))
 print(paste("version 3(n=3000):", play_dice3(3000)))
 
 #version4
-set.seed(100)
+set.seed(123)
 print(paste("version 4(n=3):",play_dice4(3)))
 print(paste("version 4(n=3000):", play_dice4(3000)))
 ```
@@ -173,7 +173,7 @@ n<-1000
 microbenchmark(play_dice1(n),play_dice2(n),play_dice3(n),play_dice4(n))
 ```
 
-Function 2, which utilizes built-in R vectorized functions, is the most efficient because these functions are implemented in the compiled language C. In contrast, Function 4, which uses apply(), is the least efficient, as it processes each element in R, leading to increased overhead. Function 1 is more efficient than Function 3 when the sample size is small, likely because table() requires additional processing that can be slower than the direct iteration performed by a for loop.
+Function 2, which utilizes built-in R vectorized functions, is the most efficient because these functions are implemented in the compiled language C. In contrast, Function 1 is the least efficient since it needs to process for loop() to roll a dice every time. Additionally, Function 4, which uses apply(), is the second least efficient, as it processes each element in R, leading to increased overhead. 
 
 ```{r}
 #large input (n=100000)
@@ -181,7 +181,7 @@ n<-100000
 microbenchmark(play_dice1(n),play_dice2(n),play_dice3(n),play_dice4(n))
 ```
 
-Function 2 remains the most efficient, while Function 4 is the least efficient. However, when the dataset is large, Function 3 using table() can be more efficient than Function 1 with a for loop. This is likely because the time taken by the table() function to interpret the code is outweighed by the overhead associated with the table() function call.
+Function 2 remains the most efficient, while Function 1 is the least efficient and Function 4 is the second least efficient.
 
 ### e.
 
@@ -197,7 +197,7 @@ simdice<-function(n){
   #number of roll=3, roll=5, and others
   roll3<-length(roll[roll==3])
   roll5<-length(roll[roll==5])
-  other<-n-roll3-roll3
+  other<-n-roll3-roll5
   
   #calculated simulated expectation
   e<-roll3/n*4+roll5/n*8-other/n*2
@@ -245,11 +245,12 @@ The close approximation of the mean and median suggests that the distribution of
 boxplot(cars_gasoline$highway_mpg)
 ```
 
-The boxplot of highway gas mileage indicates the presence of an extreme value that is significantly distant from the other data points.
+The box-plot of highway gas mileage indicates the presence of an extreme value that is significantly distant from the other data points.
 
 ```{r}
-#use log tansformation of variable
+#use log transformation of variable
 cars_gasoline$loghighway_mpg<-log(cars_gasoline$highway_mpg)
+summary(cars_gasoline$loghighway_mpg)
 ```
 
 Consider applying a log transformation to mitigate the impact of outliers.
@@ -259,12 +260,15 @@ Consider applying a log transformation to mitigate the impact of outliers.
 ```{r}
 #categorical variable
 cars_gasoline$year<-as.factor(cars_gasoline$year)
+
 highway_mpg<-lm(loghighway_mpg~torque+horsepower+height+length+width+year,data=cars_gasoline)
 summary(highway_mpg)
 ```
-For each additional unit increase in torque, the logarithm of highway MPG is expected to decrease by about -2.294e-03 miles per gallon, holding all other variables constant. It indicates the negative relationship between highway MPG and torque. Higher torque is associated with lower fuel efficiency on the highway.
+
+For each additional unit increase in torque, the logarithm of highway MPG is expected to decrease by about 2.294e-03 miles per gallon, holding all other variables constant. It indicates the negative relationship between highway MPG and torque. Higher torque is associated with lower fuel efficiency on the highway.
 
 ### e. Refit the model and generate an interaction plot.
+
 ```{r}
 library(interactions)
 
@@ -272,10 +276,11 @@ library(interactions)
 highway_mpg1<-lm(loghighway_mpg~torque*horsepower+height+length+width+year,data=cars_gasoline)
 
 #generate an interaction plot
-interact_plot(highway_mpg1,pred="torque",modx="horsepower",at = list(year = "2011"))
+interact_plot(highway_mpg1,pred="torque",modx="horsepower",at = list(year = "2011"),main.title="Relation between torque and MPG changes")
 ```
 
 ### f. Calculate the estimator of bata from d.
+
 ```{r}
 #create a matrix for all observations
 x<-model.matrix(highway_mpg,data=cars_gasoline)
@@ -289,6 +294,4 @@ beta<- solve(t(x)%*%x)%*%t(x)%*%y
 beta
 highway_mpg$coefficients
 ```
-
-
-The `echo: false` option disables the printing of code (only output is displayed).
+The obtained result is the same as lm() did prior.
