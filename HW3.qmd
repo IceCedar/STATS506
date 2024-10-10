@@ -1,0 +1,367 @@
+---
+title: "Problem Set 3"
+format: html
+editor: visual
+embed-resources: true
+---
+GitHub link: <https://github.com/IceCedar/STATS506>
+## Problem 1 - Vision
+
+### a.Merge the two files to create a single data.frame.
+
+```{r}
+#use package haven
+library(haven)
+
+#use read.xpt() to read data
+demo<-read_xpt("DEMO_D.XPT")
+vix<-read_xpt("VIX_D.XPT")
+
+#Use SEQN variable for merge
+dat<-merge(demo,vix,by="SEQN")
+
+total<-nrow(dat)
+paste("Total sample size:",total)
+```
+
+### b. Estimate the proportion of respondents within each 10-year age bracket who wear glasses/contact lenses for distance vision.
+
+```{r}
+#From data explanation from DEMO, individuals 85 and over are top coded at 85 years of age.
+dat$age_bracket <- cut(dat$RIDAGEYR,breaks = seq(0,150,by = 10),labels = paste(seq(0,140, by = 10),seq(9,149, by = 10), sep = "-"))
+
+#data frame for age bracket and glasses/contact lenses wearing for distance vision.
+#VIQ220 - Glasses/contact lenses worn for distance. 1 represents 'yes', 2 represents 'no', 9 represents 'don't know', NA represents 'missing values'.
+library(dplyr)
+wearers<-dat %>%
+  group_by(age_bracket) %>%
+  summarize(total=n(),wear=sum(VIQ220==1,na.rm=TRUE),n=wear/total)
+
+
+wearers<-wearers %>%
+  mutate(n=paste(round(n*100,3),"%"))
+
+library(knitr)
+library(kableExtra)
+kable(wearers, format = "pipe",
+      col.names = c("age group","total","wear","proportion"),
+      align = 'c',
+      caption = "Summary of VIQ220 by Age Group",
+      row.names = TRUE) %>%
+  kable_styling(full_width = TRUE, position = "center",html_font = "Times new roman", bootstrap_options = c("striped", "hover", "condensed"))
+
+```
+
+### c.Fit three logistic regression models.
+
+```{r}
+#keep 'yes' and 'no' in VIQ220
+dat<-dat %>%
+  filter(VIQ220==1|VIQ220==2)
+
+#for logstic regression: y should be 1/0
+dat$VIQ220<-as.factor(dat$VIQ220)
+
+#1.age
+lm1<-glm(VIQ220~RIDAGEYR,data=dat,family=binomial)
+
+#2.age, race, gender
+#RIAGENDR: Gender of the sample person, RIDRETH1:Recode of reported race and ethnicity information.
+lm2<-glm(VIQ220~RIDAGEYR+RIAGENDR+RIDRETH1,data=dat,family=binomial)
+
+#3.age, race, gender, poverty income ratio
+#INDFMPIR: Poverty income ratio (PIR) - a ratio of family income to poverty threshold.
+lm3<-glm(VIQ220~RIDAGEYR+RIAGENDR+RIDRETH1+INDFMPIR,data=dat,family=binomial)
+```
+
+```{r}
+#calculate odds ratio for each predictor variable using exp(coef())
+odd1<-exp(coef(lm1))
+odd2<-exp(coef(lm2))
+odd3<-exp(coef(lm3))
+```
+
+```{r}
+#calculate pseudo-R^2 for each model
+#The goodness of fit of the logistic regression model can be expressed by some variants of pseudo R squared statistics, most of which being based on the deviance of the model. (source:https://search.r-project.org/CRAN/refmans/DescTools/html/PseudoR2.html).
+
+library(pscl)
+pr1<-pR2(lm1)["McFadden"]
+pr2<-pR2(lm2)["McFadden"]
+pr3<-pR2(lm3)["McFadden"]
+```
+
+```{r}
+#extract sample size and AIC values.
+n1<-nobs(lm1)
+n2<-nobs(lm2)
+n3<-nobs(lm3)
+
+aic1<-lm1$aic
+aic2<-lm2$aic
+aic3<-lm3$aic
+```
+
+#### Produce a table:
+
+```{r}
+ptable<-function(odd,n,pr,aic){
+  # Create a data frame for odds ratios
+  odd_df <- data.frame(
+  variable = paste("Odds ratio of", names(odd)),
+  value = round(as.vector(odd), 4)  
+)
+  s_df <- data.frame(
+    variable = c("Sample Size", "Pseudo R²", "AIC"),
+    value = c(n,round(pr,4),round(aic,4))
+  )
+  s<-rbind(odd_df,s_df)
+  kable(s, format = "pipe", align = 'c') %>%
+  kable_styling(full_width = FALSE, position = "left", bootstrap_options = c("striped", "hover", "condensed"))
+}
+```
+
+```{r}
+ptable(odd1,n1,pr1,aic1)
+ptable(odd2,n2,pr2,aic2)
+ptable(odd3,n3,pr3,aic3)
+```
+
+### d.Conduct tests.
+
+#### Test whether the proportions of wearers differ between men and women:
+
+```{r}
+summary(lm3)
+```
+
+#### Test whether the odds of men and women being wears of glassess/contact lenses differ.
+
+The coefficients in the model output represent the average change in the log odds of the response variable. The p-value associated with RIAGENDR \< 2e-16, indicating that the difference in the average outcome between genders is statistically significant. The coefficient for RIAGENDR is -0.023763, which indicates that being female (coding is 0 for male and 1 for female) is associated with a decrease in the expected value of VIQ220 by approximately 0.023763 compared to males.
+
+#### Test whether the proportions of wearers differ between men and women:
+
+```{r}
+#Chi-Squared Test of Independence
+male_w <- sum(dat$VIQ220 == 1 & dat$RIAGENDR == 1,na.rm=TRUE)  
+female_w <- sum(dat$VIQ220 == 1 & dat$RIAGENDR == 2,na.rm=TRUE)
+male_nw <- sum(dat$VIQ220 == 2 & dat$RIAGENDR == 1,na.rm=TRUE)
+female_nw <- sum(dat$VIQ220 == 2 & dat$RIAGENDR == 2,na.rm=TRUE)
+
+#create conringency table
+ct<-matrix(c(male_w, male_nw, female_w, female_nw),nrow = 2)
+
+colnames(ct)<-c("Wearing","No Wearing")
+rownames(ct)<-c("male","female")
+
+# Perform the Chi-Squared Test of Independence
+ct_result<- chisq.test(ct)
+ct_result
+```
+
+The chi-square test statistic suggests that the association between gender and wearing glasses/contact lenses is statistically significant is 70.955, which indicates a stronger association between the two categorical variables. p-value \<2.2e-16 suggests that the association between gender and wearing glasses/contact lenses is statistically significant. Hence, the proportions of wearers differs for both men and women.
+
+## Problem 2 - Sakila
+
+### a. Select the year of oldest movie from and count the number of movies released in that year.
+
+```{r}
+library(DBI)
+sakila<-dbConnect(RSQLite::SQLite(),"sakila_master.db")
+
+#create a function to write query
+gg<-function(query){
+  dbGetQuery(sakila,query)
+}
+
+gg("
+   SELECT MIN(release_year) AS year_of_oldest_movie,COUNT(film_id) AS number_of_movies FROM film GROUP BY release_year
+   ")
+```
+
+### b.Least common genre of movie and number of movies in this genre.
+
+#### 1. Use SQL query and R operations.
+
+```{r}
+#Table including genres of movies and number of movies in each genre.
+genre<-gg("
+   SELECT c.name, COUNT(fc.film_id) as count
+    FROM film_category AS fc
+         RIGHT JOIN category AS c ON fc.category_id=c.category_id
+   GROUP BY c.name
+   ")
+
+i<-which.min(genre$count)
+paste("The least common genre of movie is", genre$name[i], "and", genre$count[i], "movies in this genre.")
+```
+
+#### 2. Use single SQL query.
+
+```{r}
+gg("
+   SELECT c.name, COUNT(fc.film_id) AS count
+    FROM film_category AS fc
+         RIGHT JOIN category AS c ON fc.category_id=c.category_id
+   GROUP BY c.name
+   ORDER BY count
+   LIMIT 1
+   ")
+```
+
+### c.country/countries have 13 customers.
+
+#### 1. Use SQL query and R operations.
+
+```{r}
+#Table including countries and customers.
+countries<-gg("
+     SELECT ac.country, c.customer_id AS count
+      FROM customer AS c
+           LEFT JOIN (
+                SELECT act.country, a.address_id
+                 FROM address AS a
+                       LEFT JOIN (
+                           SELECT ct.country, city.city_id
+                            FROM country AS ct
+                           INNER JOIN city ON city.country_id = ct.country_id
+                       )AS act ON act.city_id=a.city_id
+           )AS ac ON ac.address_id=c.address_id
+     ")
+
+cc<-table(countries$country)
+countries_unique<-unique(countries$country)
+
+result<-c()
+for (i in countries_unique){
+  if(cc[i]==13){
+    result<-c(result,cc[i])
+  }
+}
+result
+
+```
+
+#### 2. USE single SQL query.
+
+```{r}
+# gg("
+#    SELECT ct.country, city.city_id
+#     FROM country AS ct
+#          INNER JOIN city ON city.country_id = ct.country_id
+#    ")
+# 
+# gg("
+#    SELECT act.country, a.address_id
+#     FROM address AS a
+#          LEFT JOIN (
+#               SELECT ct.country, city.city_id
+#                FROM country AS ct
+#               INNER JOIN city ON city.country_id = ct.country_id
+#            )AS act ON act.city_id=a.city_id
+#    ")
+
+gg("
+   SELECT ac.country, COUNT(c.customer_id) AS count
+    FROM customer AS c
+         LEFT JOIN (
+              SELECT act.country, a.address_id
+               FROM address AS a
+                     LEFT JOIN (
+                         SELECT ct.country, city.city_id
+                          FROM country AS ct
+                         INNER JOIN city ON city.country_id = ct.country_id
+                     )AS act ON act.city_id=a.city_id
+         )AS ac ON ac.address_id=c.address_id
+   GROUP BY ac.country
+   HAVING count==13
+   ")
+```
+
+## Problem 3 - US Records
+
+### a. Proportion of email addresses are hosted at a domain with TLD ".com".
+
+```{r}
+us500<-read.csv("us-500.csv")
+
+#total number of email addresses
+n<-length(us500$email)
+
+#number of email addresses ended with ".com"
+m1<-sum(grepl(".com$",us500$email))
+
+#calculate the percentage
+p1<-m1/n
+
+cat(paste(p1, "email addresses are hosted at a domain with TLD \".com\"."))
+```
+
+### b.Proportion of email addresses has at least one non alphanumeric character.
+
+```{r}
+#number of email addresses has at least one non alphanumeric character.
+m2<-sum(grepl("[^a-z0-9@.]",us500$email,ignore.case = TRUE))
+
+#calculate the percentage
+p2<-m2/n
+
+cat(paste(p2, "email addresses have at least one non alphanumeric character in them."))
+
+```
+
+### c. Top 5 most common area codes amongst all phone numbers.
+
+```{r}
+phone<-c(us500$phone1,us500$phone2)
+
+#area codes for phone numbers
+areacode<-sub("(^[0-9]{3})[-].*","\\1",phone)
+
+#sorted table of area codes
+s_areacode<-sort(table(areacode),decreasing=TRUE)
+
+#Top 5 most common area codes amongst all phone numbers
+head(s_areacode,5)
+
+```
+
+### d, Histogram of the log of the apartment numbers of all addresses.
+
+```{r}
+#Extract last digit in the addresses
+last <- sub(".*?([0-9])[^0-9]*$", "\\1", us500$address)
+
+#convert to numeric
+last<-as.numeric(last)
+
+#histogram of the log of the apartment numbers
+hist(log(last),xlab="log of the apartment numbers", main="Histogram of the log of the apartment numbers of all addresses")
+```
+
+### e.Whether the apartment numbers appear to follow Benford's law.
+
+```{r}
+#Extract first digit in the addresses
+first <- sub("[^0-9]*?([0-9]).*", "\\1", us500$address)
+
+#convert to numeric
+first<-as.numeric(first)
+
+#Distribution of the first digit
+hist(first,breaks=seq(0.5,9.5,by=1),xlab="first digit", main="Benford's law testing")
+```
+
+It can be observed that the number 1 appears without a significant leading effect, while almost every other number appears with similar probabilities.
+
+```{r}
+#Numerical Analysis
+#Number of the occurence of 1 in sample size.
+n1<-length(first[first==4])
+
+#Probability of the occurence of 1 in sample size.
+p3<-n1/length(first)
+p3
+```
+
+Since the leading digit 1 occurs with a probability of 10.4%, which is less than the expected 30.1%, this indicates that the apartment numbers do not follow Benford's Law. Consequently, apartment numbers may not be considered real data in this context. Benford's Law is primarily applicable to various real-life datasets, where the data typically originates from diverse sources. The observed deviations from the patterns described by Benford’s Law suggest that the tested apartment numbers are not representative of real data.
