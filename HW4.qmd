@@ -1,0 +1,254 @@
+---
+title: "Problem Set 4"
+format: html
+editor: visual
+embed-resources: true
+---
+
+GitHub link: <https://github.com/IceCedar/STATS506>
+
+# Problem 1 - Tidyverse
+
+## a.
+
+### i. Generate a table reporting the mean and median departure delay per airport.
+
+```{r}
+library(tidyverse)
+
+#load data including delay time per airport and usual names of airports.
+load("flights.rda")
+load("airports.rda")
+
+#table reporting the mean and median departure delay.
+departure_delay <- flights %>%
+  left_join(select(airports,faa,name),by=c("origin"="faa")) %>%
+  group_by(name) %>%
+  summarize(
+    Mean_departure_delay = mean(dep_delay, na.rm = TRUE),
+    Median_departure_delay = median(dep_delay, na.rm = TRUE)
+  ) %>%
+  ungroup() %>%
+  arrange(desc(Mean_departure_delay)) %>% select(name,Mean_departure_delay,Median_departure_delay) %>%
+  rename(Departure_airport=name)
+
+departure_delay
+```
+
+### ii. Generate a table reporting the mean and median arrival delay per airport.Exclude any destination with under 10 flights.
+
+```{r}
+#table reporting the mean and median arrival delay.
+arrival_delay <- flights %>%
+  left_join(select(airports, faa, name), 
+            by = c("dest" = "faa")) %>%
+  filter(flight >= 10) %>%
+  #use the airport names not the airport codes, if the airport code does not has corresponding name, we need to display with its code. Then we can use the following line.
+  #mutate(name=ifelse(is.na(name),dest,name)) %>%
+  group_by(name) %>%
+  summarize(
+    Mean_arrival_delay = mean(arr_delay, na.rm = TRUE),
+    Median_arrival_delay = median(arr_delay, na.rm = TRUE)
+  ) %>%
+  ungroup() %>%
+  arrange(desc(Mean_arrival_delay)) %>%
+  select(name,Mean_arrival_delay,Median_arrival_delay) %>%
+  rename(Arrival_airport=name)
+
+print(arrival_delay, n = Inf)
+```
+
+## b.
+
+```{r}
+#load planes data.
+load("planes.rda")
+
+#table including model, speed, and tailnum(used for join)
+planes_temp<-planes %>%
+  select(tailnum,model,speed)
+
+#join table with flights on tailnum
+aircraft_speed <- planes_temp %>%
+  left_join(select(flights,tailnum,flight),
+            by=c("tailnum"="tailnum"))
+
+#sum flights by average speed in each aircraft
+aircraft_speed <- aircraft_speed %>%
+  group_by(model) %>%
+  summarize(average_speed=mean(speed,na.rm=TRUE),number_of_flights=sum(flight)) %>%
+  ungroup() %>%
+  filter(!is.na(average_speed) & average_speed == max(average_speed, na.rm = TRUE))
+
+aircraft_speed
+```
+
+# Problem 2 - get_temp()
+
+```{r}
+#load the Chicago nnmaps data.
+nnmaps <- readr::read_delim("chicago-nmmaps.csv")
+
+#convert the month in string to numeric and ensure the range of numbers is [1,12].
+convert_month<-function(month){
+  if(is.numeric(month)){
+    if(month<1 | month>12){
+      warning("The input MONTH should be either a numeric 1-12 or a string!")
+    }
+  }else{
+      month_string<-c("January","February","March","April","May","June","July",
+                      "August","September","October","November","December")
+      matched_index <- grep(paste0("^", month), month_string, ignore.case = TRUE)
+      month <- matched_index
+    }
+return(month)
+}
+```
+
+```{r}
+#' Title
+#'
+#' @param month, either a numeric 1-12 or a string
+#' @param year a numeric year
+#' @param data the data set to obtain data from
+#' @param celsius logically indicating whether the results should be in celsius. Default FALSE.
+#' @param average_fun a function with which to compute the mean. Default is mean.
+#' @return average temperature in a given month
+#' 
+get_temp <- function(month,year_temp,data=nnmaps,celsius = FALSE,average_fn = mean) {
+  month_temp <- convert_month(month)
+  
+  # Calculate the average temperature
+  avg_temp <- data %>%
+    filter(year == year_temp, month_numeric == month_temp) %>%
+    summarize(temp_by_month = average_fn(temp)) %>%
+    ungroup() %>%
+    mutate(temp_by_month = ifelse(celsius, (temp_by_month - 32) * 5 / 9, temp_by_month)) %>%
+    select(temp_by_month)
+
+  return(avg_temp)
+}
+```
+
+```{r}
+get_temp("Apr", 1999, data = nnmaps)
+
+```
+
+```{r}
+get_temp("Apr", 1999, data = nnmaps, celsius = TRUE)
+```
+
+```{r}
+get_temp(10, 1998, data = nnmaps, average_fn = median)
+```
+
+```{r}
+get_temp(13, 1998, data = nnmaps)
+```
+
+```{r}
+get_temp(2, 2005, data = nnmaps)
+```
+
+```{r}
+get_temp("November", 1999, data =nnmaps, celsius = TRUE,
+         average_fn = function(x) {
+           x %>% sort -> x
+           x[2:(length(x) - 1)] %>% mean %>% return
+         })
+```
+
+
+# Problem 3 -Visualization
+
+## a.
+
+```{r}
+market<-readr::read_csv("df_for_ml_improved_new_market.csv")
+
+# data including year and sales price in USD
+usd_year<- market %>%
+  select(year,price_usd) %>%
+  group_by(year) %>%
+  summarize(sales_price_usd=mean(price_usd)) %>%
+  ungroup()
+
+ggplot(usd_year, aes(x = year, y = sales_price_usd)) +
+  geom_line(color = "blue") + 
+  geom_point(color = "red") +
+  geom_smooth(method = "loess", color = "green", se = FALSE) +
+  labs(title = "Sales Price in USD Over Time",
+       x = "Year",
+       y = "Sales Price (USD)") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.title = element_text(face = "bold")
+  )
+
+```
+
+As illustrated by the graph, there is a change in the sales price in USD over time. The sales price exhibits a steady increase during this period, indicating a rising trend. Following the peak around 2008, the sales price begins to decline until approximately 2012.
+
+## b.
+
+```{r}
+#data including different genres of sales and year.
+genre_year <- market %>%
+  select(year,Genre___Photography,Genre___Print,Genre___Sculpture,Genre___Painting,Genre___Others) %>%
+  group_by(year) %>%
+  summarize(Genre_Photography=sum(Genre___Photography),
+            Genre_Print=sum(Genre___Print),
+            Genre_Sculpture=sum(Genre___Sculpture),
+            Genre_Painting=sum(Genre___Painting),
+            Genre_Others=sum(Genre___Others)) %>%
+  ungroup()
+
+# Reshape the data to long format
+genre_long <- genre_year %>%
+  pivot_longer(cols = starts_with("Genre_"), 
+               names_to = "Genre", 
+               values_to = "Sales")
+
+ggplot(genre_long,aes(x=year,y=Sales,color=Genre)) +
+  geom_line(linewidth=1)+
+  labs(title="The Distribution of Genre of Sales across Years") +
+  theme_minimal()+
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.title = element_text(face = "bold")
+  )
+
+```
+The diagram shows that the distribution of sales by genre changes over the years. Both Genre_Others and Genre_Painting exhibit similar trends, with steady increases from 1997 to 2006, followed by a decline until 2008. They then experience a steady rise from 2008 to 2010, culminating in a significant increase from 2010 to 2011. In contrast, Genre_Photography and Genre_Sculpture show significant increases in sales from 1997 to 2012. Genre_Photography maintains a consistent upward trend without noticeable declines, while Genre_Sculpture experiences more fluctuations, with sales decreasing from 2000 to 2002 and again from 2008 to 2010. For Genre_Print, sales remain relatively stable at a low level from 1997 to 2004, then increase significantly from 2004 to 2009, followed by a decline before rising again.
+
+## c.
+
+```{r}
+#data including different genres of sales, sales price, and year.
+
+genre_year_usd <- market %>%
+  select(year, price_usd, starts_with("Genre_")) %>%
+  group_by(year) %>%
+  pivot_longer(cols = starts_with("Genre_"),
+               names_to = "Genre",
+               values_to = "Sales") %>% 
+  ungroup() %>%
+  group_by(year,Genre) %>%
+  summarize(sales_price=mean(price_usd*Sales)) %>%
+  ungroup() 
+
+ggplot(genre_year_usd,aes(x=year,y=sales_price,color=Genre)) +
+  geom_line(linewidth=1)+
+  geom_smooth(method = "loess",linewidth=0.5,linetype="dotted",se=FALSE)+
+  labs(title="Change in Sales Price of Different Genres",
+       y= "average sales price in USD") +
+  theme_minimal()+
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.title = element_text(face = "bold")
+  )
+  
+```
+The diagram shows that the average sales price of Genre_Photography increased from 1997 to 2006, with a particularly dramatic rise from 2005 to 2006. Additionally, it fluctuated significantly from 2006 to 2012. Genre_Sculpture exhibited a downward trend from 1997 to 2001, followed by an increase from 2001 to 2005, after which it stabilized around a certain level. Both Genre_Others and Genre_Painting maintained sales prices consistently below 5000, without significant fluctuations. For Genre_Print, the sales price remained steady from 1997 to 2006, then increased from 2006 to 2008, before decreasing to a level similar to that of previous years from 2008 to 2010.
