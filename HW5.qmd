@@ -1,0 +1,401 @@
+---
+title: "HW5"
+format: html
+editor: visual
+embed-resources: true
+execute:
+  error: false
+---
+
+GitHub link: <https://github.com/IceCedar/STATS506>
+
+# Problem 1 - OOP Programming
+
+## a.
+
+```{r}
+## Using Rcpp to define GCD and LCM.
+library(Rcpp)
+cppFunction("
+int C_gcd(int x, int y){
+return std::gcd(x,y);
+}
+")
+cppFunction("
+int C_lcm(int x, int y){
+return std::lcm(x,y);
+}
+")
+```
+
+### 1.A constructor.
+
+```{r}
+setClass("rational",
+         slots=c(num="numeric",
+                 den="numeric"))
+```
+
+### 2.A validator that ensures the denominator is non-zero.
+
+```{r,error=TRUE}
+setValidity("rational",function(object){
+  if(object@den==0){
+    stop("The denominator is invalid!")
+  }
+  if(!is.numeric(object@num)|!is.numeric(object@den)){
+    stop("The input should be integer!")
+  }
+  if((object@num %% 1 !=0) | (object@den %% 1!=0)){
+    stop("The input should be integer!")
+  }
+  return(TRUE)
+})
+```
+
+### 3.A show method.
+
+```{r}
+setMethod("show", "rational", 
+          function(object) {
+            cat(paste(object@num, "/", object@den)) 
+            cat("\n")
+            return(invisible(object))
+          })
+```
+
+### 4. A simplify method, to obatin the simplest form.
+
+```{r}
+setGeneric("simplify",
+           function(object){
+             standardGeneric("simplify")
+           })
+
+setMethod("simplify", "rational", 
+          function(object) {
+            div <- C_gcd(object@num, object@den)  # Calculate the greatest common divisor
+            
+            if (object@num == 0) {
+              cat(0)  # If the numerator is 0, print 0
+            } else if (abs(object@den / div) == 1) {
+              cat(object@num / div)  # If the denominator is 1 after reduction, print the integer
+            } else {
+              # Handle negative rational numbers and print simplified form
+              if (object@den * object@num < 0) {
+                cat("-", abs(object@num) / div, "/", abs(object@den) / div)  # Negative rational number
+              } else {
+                cat(abs(object@num)/div, "/", abs(object@den)/div)  # Positive rational number
+              }
+            }
+            cat("\n")
+            return(invisible(object))  # Return the object invisibly
+          })
+```
+
+### 5. A quotient method. It should support a digits argument but only in printing, not the returned result.
+
+```{r}
+setGeneric("quotient",
+           function(object,...){
+             standardGeneric("quotient")
+           })
+
+
+setMethod("quotient","rational",
+          function(object,digits = NULL){
+            temp<-object@num/object@den
+           # Print the result with specified digits if provided
+            if (!is.null(digits)) {
+              print(round(temp, digits))
+            } else {
+              print(temp)
+            }
+            
+            # Return the calculated quotient
+            return(invisible(temp))
+          })
+
+```
+
+### 6. Addition, subtraction, multiplication, division. They should all return a rational.
+
+```{r}
+#Addition
+setMethod("+",signature(e1="rational",e2="rational"),
+          function(e1,e2){
+            newden<-C_lcm(e1@den,e2@den)
+            newnum<-newden/e1@den*e1@num+newden/e2@den*e2@num
+            return(new("rational",num=newnum,den=newden))
+          })
+
+#subtraction
+setMethod("-",signature(e1="rational",e2="rational"),
+          function(e1,e2){
+            newden<-C_lcm(e1@den,e2@den)
+            newnum<-newden/e1@den*e1@num-newden/e2@den*e2@num
+            return(new("rational",num=newnum,den=newden))
+          })
+
+#multiplication
+setMethod("*",signature(e1="rational",e2="rational"),
+          function(e1,e2){
+            newnum<-e1@num*e2@num
+            newden<-e1@den*e2@den
+            return(new("rational",num=newnum,den=newden))
+          })
+
+#division
+setMethod("/",signature(e1="rational",e2="rational"),
+          function(e1,e2){
+            newnum<-e1@num*e2@den
+            newden<-e1@den*e2@num
+            return(new("rational",num=newnum,den=newden))
+          })
+```
+
+## b. evaluate the following codes.
+
+```{r}
+r1<-new("rational",num=24,den=6)
+r2<-new("rational",num=7,den=230)
+r3<-new("rational",num=0,den=4)
+```
+
+```{r,error=TRUE}
+r1
+r3
+r1 + r2
+r1 - r2
+r1 * r2
+r1 / r2
+r1 + r3
+r1 * r3
+r2 / r3
+quotient(r1)
+quotient(r2)
+quotient(r2, digits = 3)
+quotient(r2, digits = 3.14)
+quotient(r2, digits = "avocado")
+q2 <- quotient(r2, digits = 3)
+q2
+quotient(r3)
+simplify(r1)
+simplify(r2)
+simplify(r3)
+```
+
+## c. Show that the validator does not allow the creation of rational's with 0 denominator, and check other malformed input to the instructor.
+
+```{r,error=TRUE}
+new("rational",num=9,den=0)
+new("rational",num=8.9,den=1.23)
+new("rational",num="a",den="b")
+new("rational",num=-4,den=-3)
+```
+
+# Problem 2 - plotly
+
+```{r}
+art<-readr::read_csv("df_for_ml_improved_new_market.csv")
+art$Genre___Others[art$Genre___Painting == 1] <- 0
+art$genre <- "Photography"
+art$genre[art$Genre___Print == 1] <- "Print"
+art$genre[art$Genre___Sculpture == 1] <- "Sculpture"
+art$genre[art$Genre___Painting == 1] <- "Painting"
+art$genre[art$Genre___Others == 1] <- "Other"
+yeargenre <- with(art, table(year, genre))
+
+ygperc <- yeargenre/apply(yeargenre, 1, sum)
+ygperc <- ygperc[, c("Painting", "Sculpture", "Photography", "Print", "Other")]
+ygpercm <- as.data.frame(ygperc)
+# Reverse level of factors so ggplot draws it the same way
+ygpercm$genre <- factor(ygpercm$genre, levels = rev(unique(ygpercm$genre)))
+```
+
+## a. Regenerate the plot which addresses the second question from the last time.
+
+```{r}
+library(tidyverse)
+library(plotly)
+plot_ly(data = ygpercm,x = ~Freq,y = ~year,
+        color = ~genre,type = 'bar',orientation = 'h'
+        ) %>%
+  layout(
+    barmode = 'stack',
+    title = list(
+      text = "Proportion of Genres in Art Sales", 
+      font = list(size=18,weight="bold"),
+      x=0.5,  # Center the title
+      xanchor = "center",  # Anchor the title to the center
+      yanchor = "top"  # Anchor the title to the top
+    ),
+    font = list(size = 11, color = "black", family = "Times New Roman"),
+    legend = list(title = list(text = "Genre")),
+    xaxis = list(title = NULL),
+    yaxis = list(title = NULL)
+  ) 
+```
+
+## b. Generate an interactive plot with plotly that can address both of these questions.
+
+```{r}
+# Create a plotly object with mean prices for different genres over the years
+p <- plot_ly(data = art) %>%
+  add_markers(x = ~year, y = ~price_usd, name = "Overall") %>%
+  add_markers(
+    x = ~year[Genre___Photography == 1], y = ~price_usd[Genre___Photography == 1], 
+    name = "Photography", visible = FALSE) %>%
+  add_markers(x = ~year[Genre___Print == 1], y = ~price_usd[Genre___Print == 1], 
+              name = "Print", visible = FALSE) %>%
+  add_markers(x = ~year[Genre___Sculpture == 1], y = ~price_usd[Genre___Sculpture == 1], 
+              name = "Sculpture", visible = FALSE) %>%
+  add_markers(x = ~year[Genre___Painting == 1], y = ~price_usd[Genre___Painting == 1], 
+              name = "Painting", visible = FALSE) %>%
+  add_markers(x = ~year[Genre___Others == 1], y = ~price_usd[Genre___Others == 1], 
+              name = "Others", visible = FALSE)
+
+# Configure the layout with update buttons for genre selection
+# Update the layout of the plot
+p <- p %>% layout(
+  updatemenus = list(
+    list(
+      font = list(size = 12),  # Button font size
+      pad = list(t = 10, b = 10, l = 15, r = 10),  # Padding around buttons
+      buttons = list(
+        list(
+          method = "update",
+          args = list(
+            list(visible = c(TRUE, FALSE, FALSE, FALSE, FALSE, FALSE)),
+            list(yaxis = list(title = "Overall"))
+          ),
+          label = "Overall"
+        ),
+        list(
+          method = "update",
+          args = list(
+            list(visible = c(FALSE, TRUE, FALSE, FALSE, FALSE, FALSE)), 
+            list(yaxis = list(title = "Photography"))
+          ),
+          label = "Photography"
+        ),
+        list(
+          method = "update",
+          args = list(
+            list(visible = c(FALSE, FALSE, TRUE, FALSE, FALSE, FALSE)),
+            list(yaxis = list(title = "Print"))
+          ),
+          label = "Print"
+        ),
+        list(
+          method = "update",
+          args = list(
+            list(visible = c(FALSE, FALSE, FALSE, TRUE, FALSE, FALSE)),
+            list(yaxis = list(title = "Sculpture"))
+          ),
+          label = "Sculpture"
+        ),
+        list(
+          method = "update",
+          args = list(
+            list(visible = c(FALSE, FALSE, FALSE, FALSE, TRUE, FALSE)),
+            list(yaxis = list(title = "Painting"))
+          ),
+          label = "Painting"
+        ),
+        list(
+          method = "update",
+          args = list(
+            list(visible = c(FALSE, FALSE, FALSE, FALSE, FALSE, TRUE)), 
+            list(yaxis = list(title = "Others"))
+          ),
+          label = "Others"
+        )
+      )
+    )
+  )
+)
+
+
+p<-p %>% layout(
+  title = list(
+    text = "Average Price of Art Over Time", 
+    font = list(size = 18, weight = "bold"),
+    x = 0.5,
+    xanchor = "center",
+    yanchor = "top"
+  ),
+  font = list(size = 11, color = "black", family = "Times New Roman"),
+  xaxis = list(title = "Year")
+)
+
+p
+```
+
+# Problem 3 - data.table
+
+## a.
+
+### i. Generate a table reporting the mean and median departure delay per airport.
+
+```{r}
+library(data.table)
+detach("package:tidyverse", unload = TRUE)
+#load data including delay time per airport and usual names of airports.
+load("flights.rda")
+load("airports.rda")
+
+#convert to data.table
+setDT(flights)
+setDT(airports)
+
+departure<-flights[,.(
+  mean_delay=mean(dep_delay,na.rm=TRUE),
+  med_delay=median(dep_delay,na.rm=TRUE),
+  numflights=.N
+),keyby="origin"]|>
+  _[numflights>=10] |>
+  _[airports,on=.(origin=faa),.(name,mean_delay,med_delay),nomatch = 0] |>
+  _[order(-mean_delay)]
+
+departure
+
+```
+
+### ii. Generate a table reporting the mean and median arrival delay per airport.Exclude any destination with under 10 flights.
+
+```{r}
+arrival<-flights[,.(
+  mean_delay=mean(arr_delay,na.rm=TRUE),
+  med_delay=median(arr_delay,na.rm=TRUE),
+  numflights=.N
+),keyby=dest] |>
+  _[numflights>=10] |>
+  _[airports,on=.(dest=faa),name:=coalesce(name, dest)] |>
+  _[,.(name,mean_delay,med_delay),nomatch=0] |>
+  _[order(-mean_delay)]
+
+print(arrival,nrows=Inf)
+
+```
+
+## b.
+
+```{r}
+#load planes data.
+load("planes.rda")
+setDT(planes)
+
+speed <- flights[planes, on = .(tailnum = tailnum)][
+  , time := air_time/60][
+  , mph := distance/time][ 
+  , .(avgmph = mean(mph, na.rm = TRUE),
+      nflights = .N), 
+  keyby = model,nomatch=0][
+  order(-avgmph)
+][1]
+
+speed
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
