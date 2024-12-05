@@ -35,32 +35,36 @@ field_team
 ### 1. Without any Parallel processing
 
 ```{r}
-team<-unique(field_RF$teamID)
-
-# Define the function
+# Function without parallel processing
 boot1 <- function(n) {
-  estimate_team <- numeric(length(team))
+  # Calculate average RF for each team
+  team_avg_rf <- field_RF %>%
+    group_by(teamID) %>%
+    summarize(average_RF = mean(RF, na.rm = TRUE))
   
-  #Use lapply to calculate bootstrap standard deviations for each team
-  boot_results <- lapply(team, function(t) {
-    dat <- field_RF$RF[field_RF$teamID == t]
-    
+  # Initialize a list to store SD estimates for each team
+  team_sd_estimates <- list()
+  
+  # Bootstrap loop for each team
+  set.seed(123)
+  for (team in unique(field_RF$teamID)) {
+    team_data <- field_RF %>% filter(teamID == team)
     boot_sds <- numeric(n)
     
-    # Perform bootstrap sampling and calculate standard deviations
     for (i in 1:n) {
-      temp <- sample(dat, length(dat), replace = TRUE)
-      boot_sds[i] <- sd(temp, na.rm = TRUE)
+      bootstrap_sample <- sample(team_data$RF, size = nrow(team_data), replace = TRUE)
+      boot_sds[i] <- sd(bootstrap_sample, na.rm = TRUE)
     }
-    mean(boot_sds, na.rm = TRUE)
-  })
+    
+    # Store the estimated SD for the current team
+    team_sd_estimates[[as.character(team)]] <- sd(boot_sds)
+  }
   
-  estimate_team <- boot_results
+  # Combine average RF and estimated SD into a data frame
+  team_results <- team_avg_rf %>%
+    mutate(estimated_sd = unlist(team_sd_estimates))
   
-  # Add the estimated standard deviations to field_team
-  field_team$sd_RF <- unlist(estimate_team)
-  
-  return(field_team)
+  return(team_results)
 }
 
 ```
@@ -70,30 +74,56 @@ boot1 <- function(n) {
 ```{r}
 library(parallel)
 
-boot2<-function(n){
+boot2 <- function(n) {
+  # Ensure field_RF is a data frame
+  if (!is.data.frame(field_RF)) {
+    stop("field_RF must be a data frame")
+  }
   
-  cl <- makeCluster(8)
-  clusterExport(cl, varlist = c("field_RF", "field_team", "team", "n"))
+  # Check if required columns exist
+  if (!all(c("teamID", "RF") %in% colnames(field_RF))) {
+    stop("field_RF must contain columns 'teamID' and 'RF'")
+  }
   
-  # Use parLapply to calculate bootstrap standard deviations for each team
-  boot_results <- parLapply(cl, team, function(t) {
-    dat <- field_RF$RF[field_RF$teamID == t]
+  # Calculate average RF for each team
+  team_avg_rf <- field_RF %>%
+    group_by(teamID) %>%
+    summarize(average_RF = mean(RF, na.rm = TRUE))
+  
+  num_cores <- detectCores() / 2
+  cl <- makeCluster(num_cores)
+  
+  # Export necessary objects and libraries to the cluster
+  clusterExport(cl, list("field_RF", "n"))
+  clusterEvalQ(cl, library(dplyr))  # Load necessary libraries on each worker
+  
+  # Define the bootstrap function for parallel processing
+  bootstrap_function <- function(team, field_RF, n) {
+    team_data <- field_RF %>% filter(teamID == team)
     boot_sds <- numeric(n)
-
-    # Perform bootstrap sampling and calculate standard deviations
+    
     for (i in 1:n) {
-      temp <- sample(dat, length(dat), replace = TRUE)
-      boot_sds[i] <- sd(temp, na.rm = TRUE)
+      bootstrap_sample <- sample(team_data$RF, size = nrow(team_data), replace = TRUE)
+      boot_sds[i] <- sd(bootstrap_sample, na.rm = TRUE)
     }
     
-    # Return the mean of the bootstrap standard deviations
-    mean(boot_sds, na.rm = TRUE)
+    return(sd(boot_sds))
+  }
+  
+  # Run the bootstrap function in parallel using parLapply
+  set.seed(123)
+  team_sd_estimates <- parLapply(cl, unique(field_RF$teamID), function(team) {
+    bootstrap_function(team, field_RF, n)
   })
   
+  # Stop the cluster after computation
   stopCluster(cl)
-  field_team$sd_RF <- unlist(boot_results)
   
-  return(field_team)
+  # Combine average RF and estimated SD into a data frame
+  team_results <- team_avg_rf %>%
+    mutate(estimated_sd = unlist(team_sd_estimates))
+  
+  return(team_results)
 }
 
 ```
@@ -103,27 +133,39 @@ boot2<-function(n){
 ```{r}
 library(future)
 library(future.apply)
-library(data.table)
 
 boot3 <- function(n) {
-  # Set up parallel computation plan and number of workers
-  plan(multisession, workers = 8) 
-
-  # Use future_lapply for parallel computation
-  results <- future_lapply(seq_along(team), function(i) {
-    t <- team[i]
-    dat <- data.table(field_RF$RF[field_RF$teamID == t])
+  # Set up parallel computation plan
+  plan(multisession, workers = 4) 
+  options(future.rng.onMisuse = "ignore") 
+  
+  # Define the bootstrap function for each team
+  bootstrap_function <- function(team, field_RF, n) {
+    team_data <- field_RF %>% filter(teamID == team)
+    boot_sds <- numeric(n)
     
-    # Efficient matrix-based bootstrap sampling
-    boot_samples <- matrix(sample(dat$V1, n * nrow(dat), replace = TRUE), ncol = n)
-    boot_sds <- apply(boot_samples, 2, sd, na.rm = TRUE)
+    for (i in 1:n) {
+      bootstrap_sample <- sample(team_data$RF, size = nrow(team_data), replace = TRUE)
+      boot_sds[i] <- sd(bootstrap_sample, na.rm = TRUE)
+    }
     
-    mean(boot_sds, na.rm = TRUE)
-  }, future.seed = TRUE)
-
-  # Combine the results into the field_team data frame
-  field_team <- field_team %>% mutate(sd_RF = unlist(results))
-  return(field_team)
+    return(sd(boot_sds))
+  }
+  
+  # Run the bootstrap function in parallel using future_lapply
+  set.seed(123)
+  team_sd_estimates <- future_lapply(unique(field_RF$teamID), bootstrap_function, field_RF = field_RF, n = n)
+  
+  # Calculate average RF for each team
+  team_avg_rf <- field_RF %>%
+    group_by(teamID) %>%
+    summarize(average_RF = mean(RF, na.rm = TRUE))
+  
+  # Combine average RF and estimated SD into a data frame
+  team_results <- team_avg_rf %>%
+    mutate(estimated_sd = unlist(team_sd_estimates))
+  
+  return(team_results)
 }
 
 ```
@@ -136,7 +178,8 @@ boot3 <- function(n) {
 field_team1<-boot1(1000)
 field_team1 %>%
   arrange(desc(average_RF)) %>%  # Order by average_RF
-  head(10) 
+  head(10)
+
 ```
 
 ### 2. Using parallel processing
@@ -174,6 +217,7 @@ Future<-system.time({
 
 rbind(basic,Parrallel,Future)
 ```
+
 ```{r}
 #Compare different sample size
 basic<-system.time({
